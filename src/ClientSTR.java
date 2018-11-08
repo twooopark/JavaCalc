@@ -34,8 +34,8 @@ public class ClientSTR {
                 //headByteBuf.order(ByteOrder.LITTLE_ENDIAN);
 
                 //type : 2byte
-                headByteBuf.put(StaticVal.REQUEST);
-                headByteBuf.put(StaticVal.PREC[0]);
+//                headByteBuf.put(StaticVal.REQUEST);
+//                headByteBuf.put(StaticVal.PREC[0]);
 
                 //데이터 길이, 문자열
                 //Long -> String -> char -> byte, ex) 12L -> "12" -> '1' '2' -> 0x31 0x32

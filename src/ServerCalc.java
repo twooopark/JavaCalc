@@ -12,16 +12,22 @@ import java.util.Stack;
 public class ServerCalc {
     public static void main(String[] args) throws IOException {
         ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
-//        serverSocketChannel.bind(new InetSocketAddress(StaticVal.IP, StaticVal.PORT));
         serverSocketChannel.bind(new InetSocketAddress(StaticVal.PORT));
-
         System.out.println("[server] listening...");
 
         while (true) {
             SocketChannel socketChannel = serverSocketChannel.accept();
             System.out.println("[server] connected from " + socketChannel.getRemoteAddress());
             try {
-                    /**************************** receive *******************************/
+
+                    /**
+                     1. 목표 : 매우 긴 연산을 처리하는 것
+                     2. 문자로 된 '수백만개의 연산' 연산자 우선순위에 따라 처리가 과연 가능할까?
+                     3. ex) "10+10-20+10+10-20 ... 10+10-20*7" , 길이 10mb
+                            과연, 결과는 0이 나올까? -120이 나올까?
+                     4.
+
+                     * /
                     /**************************** Header recv [ByteBuffer Array, Channel] *******************************/
                     //3. [서버] 헤더 수신
                     ByteBuffer typeBuf = ByteBuffer.allocate(StaticVal.TYPE_SIZE);
@@ -39,6 +45,7 @@ public class ServerCalc {
                             String sLength = StandardCharsets.UTF_8.decode(lengthBuf).toString();
                             Long bodyLength = Long.parseLong(sLength);
                             int iBodyLength = Integer.parseInt(sLength);
+
 
                             /**************************** Body recv [ByteBuffer, Channel] *******************************/
                             //4. [서버] 바디 수신
@@ -63,46 +70,51 @@ public class ServerCalc {
                             dataBuf.flip();
                             bodyData.append(StandardCharsets.UTF_8.decode(dataBuf).toString());
 
-                            System.out.println("[server] recv data: " + bodyData.toString());
+                            if(bodyData.equals("")){
+                                System.out.println("[ERROR] bodyData is null");
+                                break;
+                            }
 
                             /**************************** Calc [Stack<String>] *******************************/
-                            //후위표기 연산(값 저장)
-                            Stack<String> valSt = new Stack();
+                            String result = "123";
 
-                            //중위표기 -> 후위표기 변환(연산자 저장)
-                            Stack<String> opSt = new Stack();
-                            String valTemp = "";
-
-                            //연산
-                            for (int i = 0; i < bodyLength; i++) {
-                                char token = bodyData.charAt(i);
-                                //피연산자
-                                if (!StaticVal.op.contains(token)) { //if(token < 48 || 57 < token)
-                                    valTemp += token;
-                                }
-                                //연산자
-                                else if (StaticVal.op.contains(token)) {
-                                    //피연산자 푸시, valTemp 초기화
-                                    valSt.push(valTemp);
-                                    valTemp = "";
-
-                                    //앞에 연산자가 있는 경우
-                                    if (!opSt.isEmpty()) {
-                                        //calculator : valSt에서 pop 한 값 2개, opSt로 연산
-                                        valSt.push(String.valueOf(calculator(valSt, opSt)));
-                                        opSt.push(String.valueOf(token));
-                                    }
-                                    //첫 연산자는 바로 push
-                                    else {
-                                        opSt.push(String.valueOf(token));
-                                    }
-                                } else {
-                                    System.out.println("[server] ?: " + token);
-                                }
-                            }
-                            valSt.push(valTemp);
-                            String result = String.valueOf(calculator(valSt, opSt));
-                            System.out.println("[server] calc result: " + result);
+//                            //후위표기 연산(값 저장)
+//                            Stack<String> valSt = new Stack();
+//
+//                            //중위표기 -> 후위표기 변환(연산자 저장)
+//                            Stack<String> opSt = new Stack();
+//                            String valTemp = "";
+//
+//                            //연산
+//                            for (int i = 0; i < bodyLength; i++) {
+//                                char token = bodyData.charAt(i);
+//                                //피연산자
+//                                if (!StaticVal.op.contains(token)) { //if(token < 48 || 57 < token)
+//                                    valTemp += token;
+//                                }
+//                                //연산자
+//                                else if (StaticVal.op.contains(token)) {
+//                                    //피연산자 푸시, valTemp 초기화
+//                                    valSt.push(valTemp);
+//                                    valTemp = "";
+//
+//                                    //앞에 연산자가 있는 경우
+//                                    if (!opSt.isEmpty()) {
+//                                        //calculator : valSt에서 pop 한 값 2개, opSt로 연산
+//                                        valSt.push(String.valueOf(calculator(valSt, opSt)));
+//                                        opSt.push(String.valueOf(token));
+//                                    }
+//                                    //첫 연산자는 바로 push
+//                                    else {
+//                                        opSt.push(String.valueOf(token));
+//                                    }
+//                                } else {
+//                                    System.out.println("[server] ?: " + token);
+//                                }
+//                            }
+//                            valSt.push(valTemp);
+//                            String result = String.valueOf(calculator(valSt, opSt));
+//                            System.out.println("[server] calc result: " + result);
 
                             /**************************** response [ByteBuffer, Channel] *******************************/
                             //response Header

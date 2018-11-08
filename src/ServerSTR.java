@@ -22,18 +22,19 @@ public class ServerSTR {
             System.out.println("[server] connected from " + socket.getRemoteSocketAddress());
             try {
                 InputStream is = socket.getInputStream();
-//                OutputStream os = socket.getOutputStream();
+                OutputStream os = socket.getOutputStream();
                     /**************************** receive *******************************/
                     /**************************** Header recv [ByteBuffer Array, Channel] *******************************/
                     //3. [서버] 헤더 수신
                     byte[] headBuf = new byte[StaticVal.HEAD_SIZE];
 
                     if( is.read(headBuf) != -1) {
-                        StringBuffer sb = new StringBuffer(new String(headBuf));
-                        String type = sb.substring(0, 2);
+                        StringBuffer headSB = new StringBuffer(new String(headBuf));
+                        String type = headSB.substring(0, 2);
                         if (type.equals(StaticVal.REQ)) {
-                            String prec = sb.substring(2, 4);
-                            String leng = sb.substring(4, 14);
+                            String prec = headSB.substring(2, 4);
+                            int precInt = Integer.parseInt(prec);
+                            String leng = headSB.substring(4, 14);
                             int bodyLengInt = Integer.parseInt(leng);
 
                             /**************************** body recv [byte[], StringBuffer, Socket] *******************************/
@@ -45,23 +46,50 @@ public class ServerSTR {
                             bodyBuf = new byte[bodyLengInt];
 
                             int readByteCount;
-                            //BUFFERSIZE 보다 내용이 긴 경우, 계속해서 읽는다.
+
+                            StringBuffer bodyData = new StringBuffer();
                             while (0 < (readByteCount = is.read(bodyBuf))) {
                                 String inStr = new String(bodyBuf, 0, readByteCount);
-                                System.out.print(inStr);
+                                String val = "";
+                                for (int i = 0; i < bodyLengInt; i++) {
+                                    char ch = inStr.charAt(i);
+                                    if (!StaticVal.op.contains(ch)) {
+                                        val += ch;
+                                    }
+                                    else if (StaticVal.op.contains(ch)) {
+                                        bodyData.append(val+" "+ch+" ");
+                                        val = "";
+                                    }
+                                }
+                                bodyData.append(val);
                             }
-                            System.out.print(leng);
-//                            StringBuffer bodyData = new StringBuffer();
-//                            while (0 < (readByteCount = is.read(bodyBuf))) {
-//
-//                                String inStr = new String(bodyBuf, 0, readByteCount);
-//                                System.out.print(inStr);
-//
-////                                bodyData.append(new String(bodyBuf));
-//                                //if( (bodyLengInt -= readByteCount) == 0 ) break;
-//                            }
-//
-//                            System.out.println("[client] recv data: " + bodyData.toString());
+                            System.out.println("[server] recv data: " + bodyData.toString());
+
+                            String stackExpressionStr[] = divideExpression(bodyData.toString());
+//                            for (String e : stackExpressionStr) System.out.print(e + " ");
+
+                            String res = String.format(StaticVal.PREC_STR_Format[precInt], calculate(stackExpressionStr));
+                            System.out.println("[server] calc result: " + res);
+
+                            /**************************** response [ByteBuffer, Channel] *******************************/
+                            //response Header
+                            headSB.delete(0,14);
+
+                            headSB.append(StaticVal.RES);
+                            headSB.append(StaticVal.PRECS[2]);
+
+                            leng = String.valueOf(res.length());
+                            if (leng.length() < 10) {
+                                int zeroPaddingSize = StaticVal.LENG_SIZE - leng.length();
+                                while ((zeroPaddingSize--) > 0) headSB.append("0");
+                            }
+                            headSB.append(leng);
+
+                            System.out.println(headSB.toString()+res);
+                            os.write( (headSB.toString()+res).getBytes() );
+                            os.flush();
+
+
                         }
                     }
 
@@ -78,31 +106,67 @@ public class ServerSTR {
         }
     }
 
-    private static int calculator(Stack<String> valSt, Stack<String> opSt) {
-        int t1 = Integer.parseInt(valSt.pop());
-        int t2 = Integer.parseInt(valSt.pop());
-        int temp = 0;
-        switch (opSt.pop().charAt(0)) {
-            case '+':
-                temp = t2 + t1;
-                break;
-            case '-':
-                temp = t2 - t1;
-                break;
-            case '*':
-                temp = t2 * t1;
-                break;
-            case '/':
-                if (t1 == 0) {
-                    System.out.print("Cannot divide by'0'");
-                    break;
+    private static String[] divideExpression(String expression) {
+        String[] expressionArr = expression.split(" ");
+        String expressionStr = "";
+        Stack<String> operatorStack = new Stack<String>();
+
+        for (String exp : expressionArr) {
+            try {
+                double number = Double.parseDouble(exp);
+                expressionStr += number + " ";
+            } catch (NumberFormatException e) { // 연산자 차례
+                if (exp.equals("(")) operatorStack.push("(");
+                else if (exp.equals(")")) {
+                    while (!operatorStack.peek().equals("(")) expressionStr += operatorStack.pop() + " ";
+                    operatorStack.pop(); // "(" 삭제
+                } else {
+                    OperatorPriorityWithParentheses priority = OperatorPriorityWithParentheses.findPriority(exp);
+                    while (!operatorStack.isEmpty()) {
+                        String expInStack = operatorStack.peek();
+                        if (priority.getPriority() <= OperatorPriorityWithParentheses.findPriority(expInStack).getPriority())
+                            expressionStr += operatorStack.pop() + " ";
+                        else break;
+                    }
+                    operatorStack.push(exp);
                 }
-                temp = t2 / t1;
-                break;
-            default:
-                break;
+
+            }
         }
-        return temp;
+
+        while (!operatorStack.isEmpty()) expressionStr += operatorStack.pop() + " ";
+
+        return expressionStr.trim().split(" ");
+    }
+
+    private static double calculate(String[] stackExpressionStr) {
+        Stack<Double> numberStack = new Stack<Double>();
+        for (String exp : stackExpressionStr) {
+            try {
+                double number = Double.parseDouble(exp);
+                numberStack.push(number);
+            } catch (NumberFormatException e) {
+                double num1 = numberStack.pop();
+                double num2 = numberStack.pop();
+//                System.out.print("\n" + num2 + exp + num1);
+                switch (exp) {
+                    case "+":
+                        numberStack.push(num2 + num1);
+                        break;
+                    case "-":
+                        numberStack.push(num2 - num1);
+                        break;
+                    case "*":
+                        numberStack.push(num2 * num1);
+                        break;
+                    case "/":
+                        numberStack.push(num2 / num1);
+                        break;
+                }
+            }
+        }
+
+        return numberStack.pop();
     }
 }
 
